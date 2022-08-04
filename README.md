@@ -1,4 +1,4 @@
-# MinIO on SNO (Single-Node OpenShift)
+``# MinIO on SNO (Single-Node OpenShift)
 
 [MinIO] is an open-source object storage server with support for the S3 API.
 This means that you can run your own S3 deployment from [SNO (Single-Node
@@ -21,7 +21,75 @@ filestorage-backed PersistantVolume (PV) for MinIO to use.
 [sno-local-path-provisioner] can provide a dynamic StorageClass to meet this
 requirement.
 
-## Deploying
+## Deploying 
+```bash
+# create a project for segregation
+$ oc new-project minio
+```
+
+### Pre-Requirements
+````bash
+$ oc version
+  Client Version: 4.9.0-202112142229.p0.g96e95ce.assembly.stream-96e95ce
+  Server Version: 4.9.38
+  Kubernetes Version: v1.22.8+f34b40c
+
+$ helm version
+version.BuildInfo{Version:"v3.6.0", GitCommit:"7f2df6467771a75f5646b7f12afb408590ed1755", GitTreeState:"dirty", GoVersion:"go1.16.4"}
+
+$ helm search repo minio
+  NAME         	CHART VERSION	APP VERSION	DESCRIPTION
+  bitnami/minio	11.7.17      	2022.8.2   	MinIO(R) is an object storage server, compatibl...
+````
+
+### using Values Openshif cluster values
+
+Update `./values.yaml` with values for your environment. Then, run:
+
+```bash
+$ MINIO_IMAGE=quay.io/minio/minio:RELEASE.2022-08-02T23-59-16Z
+$ OCP_DNS_NAME=$(oc whoami --show-console | awk -F. '{sub($1 FS, ".")}1')
+$ MINIO_API_DNS_NAME="minio${OCP_DNS_NAME}"
+$ MINIO_CONSOLE="minio-console${OCP_DNS_NAME}"
+$ USER_ACCESS_KEY="minio"
+$ USER_SECRET_ACCESS_KEY="minio123"
+
+$ echo "${MINIO_IMAGE}\n${OCP_DNS_NAME}\n${MINIO_API_DNS_NAME}\n${MINIO_CONSOLE}\n${USER_ACCESS_KEY}\n${USER_ACCESS_KEY}\n${USER_SECRET_ACCESS_KEY}\n"
+
+$ cat <<EOF >values.yaml
+---
+image: "${MINIO_IMAGE}"
+
+ingress:
+  minioApiDnsName: "${MINIO_API_DNS_NAME}"
+  minioConsoleDnsName: "${MINIO_CONSOLE}"
+
+user:
+  accessKey: "${USER_ACCESS_KEY}"
+  secretAccessKey: "${USER_SECRET_ACCESS_KEY}"
+EOF
+
+$ helm install minio .
+  NAME: minio
+  LAST DEPLOYED: Thu Aug  4 11:59:49 2022
+  NAMESPACE: minio
+  STATUS: deployed
+  REVISION: 1
+  TEST SUITE: None
+```
+
+> for solving problems with image stream
+```bash
+# create pull secret for image
+$ oc get secret installation-pull-secrets -n openshift-image-registry -o yaml > installation-pull-secrets.yaml
+
+# make cleanup (adjust namespace).. then create the pull secret
+$ oc create -f installation-pull-secrets.yaml
+
+$ oc secrets link default installation-pull-secrets --for=pull -n minio
+$ oc secrets link builder installation-pull-secrets -n minio
+```
+### using Values File
 
 Update `./values.yaml` with values for your environment. Then, run:
 
@@ -317,6 +385,13 @@ aws:
 ```
 
 <https://github.com/grafana/loki/issues/1434>
+
+# References
+* https://github.com/minio/minio/tree/master/docs/tls#generate-private-key-with-rsa
+* https://github.com/minio/minio/tree/master/docs/tls/kubernetes
+* https://docs.openshift.com/container-platform/4.10/security/certificate_types_descriptions/service-ca-certificates.html
+  * https://github.com/openshift/service-ca-operator/blob/master/README.md
+* https://examples.openshift.pub/networking/services-routes/service-serving-certificate-secrets/
 
 ## License
 
